@@ -22,6 +22,7 @@ static void select_next_page(struct tofi *tofi);
 static void next_cursor_or_result(struct tofi *tofi);
 static void previous_cursor_or_result(struct tofi *tofi);
 static void reset_selection(struct tofi *tofi);
+static void autocomplete_selection(struct tofi *tofi);
 
 void input_handle_keypress(struct tofi *tofi, xkb_keycode_t keycode)
 {
@@ -78,13 +79,29 @@ void input_handle_keypress(struct tofi *tofi, xkb_keycode_t keycode)
 			|| (key == KEY_TAB && shift)
 			|| (key == KEY_H && alt)
 			|| ((key == KEY_K || key == KEY_P || key == KEY_B) && (ctrl || alt))) {
-		select_previous_result(tofi);
+		struct entry *entry = &tofi->window.entry;
+		const char *sel = NULL;
+		if (entry->results.count > 0) {
+			sel = entry->results.buf[entry->first_result + entry->selection].string;
+		}
+		if (sel && strcmp(entry->input_utf8, sel) == 0) {
+			select_previous_result(tofi);
+		}
+		autocomplete_selection(tofi);
 	} else if (key == KEY_DOWN
 			|| key == KEY_RIGHT
 			|| key == KEY_TAB
 			|| (key == KEY_L && alt)
 			|| ((key == KEY_J || key == KEY_N || key == KEY_F) && (ctrl || alt))) {
-		select_next_result(tofi);
+		struct entry *entry = &tofi->window.entry;
+		const char *sel = NULL;
+		if (entry->results.count > 0) {
+			sel = entry->results.buf[entry->first_result + entry->selection].string;
+		}
+		if (sel && strcmp(entry->input_utf8, sel) == 0) {
+			select_next_result(tofi);
+		}
+		autocomplete_selection(tofi);
 	} else if (key == KEY_HOME) {
 		reset_selection(tofi);
 	} else if (key == KEY_PAGEUP) {
@@ -419,4 +436,40 @@ void select_next_page(struct tofi *tofi)
 	}
 	entry->selection = 0;
 	entry->last_num_results_drawn = entry->num_results_drawn;
+}
+
+void autocomplete_selection(struct tofi *tofi)
+{
+	struct entry *entry = &tofi->window.entry;
+	if (entry->results.count == 0) return;
+
+	const char *str = entry->results.buf[entry->first_result + entry->selection].string;
+	if (!str) return;
+
+	entry->cursor_position = 0;
+	entry->input_utf32_length = 0;
+	entry->input_utf32[0] = U'\0';
+
+	size_t len = strnlen(str, sizeof(entry->input_utf8) - 1);
+	memcpy(entry->input_utf8, str, len);
+	entry->input_utf8[len] = '\0';
+	entry->input_utf8_length = len;
+
+	size_t i = 0;
+	size_t i32len = 0;
+	char tmp[4];
+	while (i < len && i32len < N_ELEM(entry->input_utf32) - 1) {
+		uint32_t cp = utf8_to_utf32(&str[i]);
+
+		entry->input_utf32[i32len++] = cp;
+
+		int nbytes = utf32_to_utf8(cp, tmp);
+		if (nbytes <= 0) break;
+
+		i += nbytes;
+	}
+
+	entry->input_utf32[i32len] = U'\0';
+	entry->input_utf32_length = i32len;
+	entry->cursor_position = i32len;
 }
