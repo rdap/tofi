@@ -76,31 +76,15 @@ void input_handle_keypress(struct tofi *tofi, xkb_keycode_t keycode)
 		next_cursor_or_result(tofi);
 	} else if (key == KEY_UP
 			|| key == KEY_LEFT
-			|| (key == KEY_TAB && shift)
 			|| (key == KEY_H && alt)
 			|| ((key == KEY_K || key == KEY_P || key == KEY_B) && (ctrl || alt))) {
-		struct entry *entry = &tofi->window.entry;
-		const char *sel = NULL;
-		if (entry->results.count > 0) {
-			sel = entry->results.buf[entry->first_result + entry->selection].string;
-		}
-		if (sel && strcmp(entry->input_utf8, sel) == 0) {
-			select_previous_result(tofi);
-		}
-		autocomplete_selection(tofi);
+		select_previous_result(tofi);
 	} else if (key == KEY_DOWN
 			|| key == KEY_RIGHT
-			|| key == KEY_TAB
 			|| (key == KEY_L && alt)
 			|| ((key == KEY_J || key == KEY_N || key == KEY_F) && (ctrl || alt))) {
-		struct entry *entry = &tofi->window.entry;
-		const char *sel = NULL;
-		if (entry->results.count > 0) {
-			sel = entry->results.buf[entry->first_result + entry->selection].string;
-		}
-		if (sel && strcmp(entry->input_utf8, sel) == 0) {
-			select_next_result(tofi);
-		}
+		select_next_result(tofi);
+	} else if (key == KEY_TAB) {
 		autocomplete_selection(tofi);
 	} else if (key == KEY_HOME) {
 		reset_selection(tofi);
