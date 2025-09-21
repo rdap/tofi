@@ -1,5 +1,13 @@
 # Changelog
 
+## [2025-09-20]
+### Forked
+- Forked from tofi.
+- Added tab autocompletion from achiue's tofi fork.
+- Isolated tab from sharing a function with the arrow keys.
+- Removed now-unused reference to shift key.
+- Renamed project to wdmenu.
+
 ## [0.9.1] - 2023-04-10
 ### Fixed
 - Fixed broken line spacing for some fonts with the HarfBuzz backend.
