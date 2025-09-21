@@ -1,4 +1,4 @@
-# Tofi
+# wdmenu
 
 An extremely fast and simple [dmenu](https://tools.suckless.org/dmenu/) /
 [rofi](https://github.com/davatorium/rofi) replacement for
@@ -63,7 +63,7 @@ meson build && ninja -C build install
 ```
 
 ### Arch
-Tofi is available in the [AUR](https://aur.archlinux.org/packages/wdmenu):
+wdmenu is available in the [AUR](https://aur.archlinux.org/packages/wdmenu):
 ```sh
 paru -S wdmenu
 ```
@@ -102,7 +102,7 @@ See the main [manpage](doc/wdmenu.1.md) for more info.
 
 ### Theming
 
-Tofi supports a fair number of theming options - see the default [config
+wdmenu supports a fair number of theming options - see the default [config
 file](doc/config) or the config file [manpage](doc/wdmenu.5.md) for a complete
 description. Theming is based on the box model shown below:
 
@@ -164,7 +164,7 @@ In roughly descending order, the most important options for performance are:
   with Pango & Fontconfig takes ~120ms.
 
   The solution is to pass a path to a font file to `--font`, e.g. `--font
-  /usr/share/fonts/noto/NotoSansMono-Regular.ttf`. Tofi will then skip any font
+  /usr/share/fonts/noto/NotoSansMono-Regular.ttf`. wdmenu will then skip any font
   searching, and use [Harfbuzz](https://harfbuzz.github.io/) and
   [Cairo](https://www.cairographics.org/) directly to load the font and display
   text. This massively speeds up startup (font loading takes <1ms). The (minor
