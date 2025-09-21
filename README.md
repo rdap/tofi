@@ -16,7 +16,6 @@ single frame.
 ## Table of Contents
 * [Install](#install)
   * [Building](#building)
-  * [Arch](#arch)
 * [Usage](#usage)
   * [Theming](#theming)
 * [Performance](#performance)
@@ -60,12 +59,6 @@ sudo apt install meson scdoc wayland-protocols
 Then build:
 ```sh
 meson build && ninja -C build install
-```
-
-### Arch
-wdmenu is available in the [AUR](https://aur.archlinux.org/packages/wdmenu):
-```sh
-paru -S wdmenu
 ```
 
 ## Usage
