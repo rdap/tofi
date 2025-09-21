@@ -14,7 +14,7 @@
 #include "xmalloc.h"
 
 static const char *default_cache_dir = ".cache";
-static const char *cache_basename = "tofi-compgen";
+static const char *cache_basename = "wdmenu-compgen";
 
 [[nodiscard("memory leaked")]]
 static char *get_cache_path() {

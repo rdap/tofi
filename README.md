@@ -8,7 +8,7 @@ An extremely fast and simple [dmenu](https://tools.suckless.org/dmenu/) /
 
 The aim is to do just what I want it to as quick as possible.
 
-When [configured correctly](#performance), tofi can get on screen within a
+When [configured correctly](#performance), wdmenu can get on screen within a
 single frame.
 
 ![](screenshot_fullscreen.png)
@@ -63,47 +63,47 @@ meson build && ninja -C build install
 ```
 
 ### Arch
-Tofi is available in the [AUR](https://aur.archlinux.org/packages/tofi):
+Tofi is available in the [AUR](https://aur.archlinux.org/packages/wdmenu):
 ```sh
-paru -S tofi
+paru -S wdmenu
 ```
 
 ## Usage
 
-By default, running `tofi` causes it to act like dmenu, accepting options on
+By default, running `wdmenu` causes it to act like dmenu, accepting options on
 `stdin` and printing the selection to `stdout`.
 
-`tofi-run` is a symlink to `tofi`, which will cause tofi to display a list of
+`wdmenu-run` is a symlink to `wdmenu`, which will cause wdmenu to display a list of
 executables under the user's `$PATH`.
 
-`tofi-drun` is also a symlink to `tofi`, which will cause tofi to display a
+`wdmenu-drun` is also a symlink to `wdmenu`, which will cause wdmenu to display a
 list of applications found in desktop files as described by the [Desktop Entry
 Specification](https://specifications.freedesktop.org/desktop-entry-spec/desktop-entry-spec-latest.html).
 
 To use as a launcher for Sway, add something similar to the following to your
 Sway config file:
 ```
-set $menu tofi-run | xargs swaymsg exec --
+set $menu wdmenu-run | xargs swaymsg exec --
 bindsym $mod+d exec $menu
 ```
 
-For `tofi-drun`, there are two possible methods:
+For `wdmenu-drun`, there are two possible methods:
 ```
 # Launch via Sway
-set $drun tofi-drun | xargs swaymsg exec --
+set $drun wdmenu-drun | xargs swaymsg exec --
 bindsym $mod+Shift+d exec $drun
 
 # Launch directly
-set $drun tofi-drun --drun-launch=true
+set $drun wdmenu-drun --drun-launch=true
 bindsym $mod+Shift+d exec $drun
 ```
 
-See the main [manpage](doc/tofi.1.md) for more info.
+See the main [manpage](doc/wdmenu.1.md) for more info.
 
 ### Theming
 
 Tofi supports a fair number of theming options - see the default [config
-file](doc/config) or the config file [manpage](doc/tofi.5.md) for a complete
+file](doc/config) or the config file [manpage](doc/wdmenu.5.md) for a complete
 description. Theming is based on the box model shown below:
 
 ![Default theme screenshot](screenshot_default.png)
@@ -147,14 +147,14 @@ tweak them to look correct on your display.
 
 ## Performance
 
-By default, tofi isn't really any faster than its alternatives. However, when
+By default, wdmenu isn't really any faster than its alternatives. However, when
 configured correctly, it can startup and get on screen within a single frame,
 or about 2ms in the ideal case.
 
 ### Options
 In roughly descending order, the most important options for performance are:
 
-* `--font` - This is *by far* the most important option. By default, tofi uses
+* `--font` - This is *by far* the most important option. By default, wdmenu uses
   [Pango](https://pango.gnome.org/) for font rendering, which (on Linux) looks
   up fonts via
   [Fontconfig](https://www.freedesktop.org/wiki/Software/fontconfig/).
@@ -177,7 +177,7 @@ In roughly descending order, the most important options for performance are:
   window (2880px × 1800px) takes ~20ms on the first frame, whereas a dmenu-like
   ribbon (2880px × 60px) takes ~1ms.
   
-* `--num-results` - By default, tofi auto-detects how many results will fit in
+* `--num-results` - By default, wdmenu auto-detects how many results will fit in
   the window. This is quite tricky when `--horizontal=true` is passed, and
   leads to a few ms slowdown (only in this case). Setting a fixed number of
   results will speed this up, but since this likely only applies to dmenu-like
@@ -197,7 +197,7 @@ In roughly descending order, the most important options for performance are:
 
 * `--ascii-input` - Proper Unicode handling is slower than plain ASCII - on the
   order of a few ms for ~40 kB of input. Specifying `--ascii-input true` will
-  disable some of this handling, speeding up tofi's startup, but searching for
+  disable some of this handling, speeding up wdmenu's startup, but searching for
   non-ASCII characters may not work properly.
 
 * `--late-keyboard-init` - The last avoidable thing that slows down startup is
@@ -209,11 +209,11 @@ In roughly descending order, the most important options for performance are:
 ### Benchmarks
 
 Below are some rough benchmarks of the included themes on different machines.
-These were generated with version 0.1.0 of tofi. The time shown is measured
+These were generated with version 0.1.0 of wdmenu. The time shown is measured
 from program launch to Sway reporting that the window has entered the screen.
 Results are the mean and standard deviation of 10 runs. All tests were
 performed with `--font /path/to/font/file.ttf`, `--hint-font false` and the
-equivalent of `--ascii-input true` (as tofi 0.1.0 didn't support Unicode text).
+equivalent of `--ascii-input true` (as wdmenu 0.1.0 didn't support Unicode text).
 
 <table>
   <thead>
@@ -305,11 +305,11 @@ question](https://stackoverflow.com/questions/73278608/can-mmaps-performance-be-
 if you want full details, but basically by setting
 `/sys/kernel/mm/transparent_hugepage/shmem_enabled` to `advise`, we can tell
 the kernel we're going to be working with large memory areas. This results in
-fewer page faults when first allocating memory, speeding up tofi.
+fewer page faults when first allocating memory, speeding up wdmenu.
 
 Note that I don't recommend you play with this unless you know what you're
 doing (I don't), but I've included it just in case, and to show that the
-slowdown on large screens is partially due to factors beyond tofi's control.
+slowdown on large screens is partially due to factors beyond wdmenu's control.
 
 The table below shows the effects of additionally enabling hugepages from the
 table above. The dmenu theme has been skipped, as the window it creates is too
@@ -349,13 +349,13 @@ support hugepages.
 ### Where is the time spent?
 
 For those who are interested in how much time there is even left to save, I've
-plotted the startup performance of version 0.8.0 of `tofi-run` below, alongside
+plotted the startup performance of version 0.8.0 of `wdmenu-run` below, alongside
 the corresponding debug output. This is the data from 1000 runs of the dmenu
 theme on a Ryzen 7 3700X machine, with all performance options set as mentioned
 above, along with `--num-results 10`. I've highlighted some points of interest,
-most of which are out of tofi's control.
+most of which are out of wdmenu's control.
 
-[![Startup performance plot](startup_performance.svg)](https://raw.githubusercontent.com/philj56/tofi/master/startup_performance.svg)
+[![Startup performance plot](startup_performance.svg)](https://raw.githubusercontent.com/philj56/wdmenu/master/startup_performance.svg)
 
 (You may want to click the image to see it at full size).
 
@@ -367,6 +367,6 @@ performance logging used slows down the code by roughly 10%.
 As you can see, there's not a huge amount of time that could even theoretically
 be saved. Somewhere around 50% of the startup time is simply spent waiting, and
 most of the code isn't parallelisable, as many steps depend on the result of
-previous steps. One idea would be to daemonize tofi, skipping much of this
+previous steps. One idea would be to daemonize wdmenu, skipping much of this
 startup. I don't want to do this, however, for two main reasons: complexity,
 and I think it's probably about fast enough already!

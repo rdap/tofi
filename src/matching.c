@@ -177,7 +177,7 @@ int32_t fuzzy_match(const char *restrict pattern, const char *restrict str)
          *
          * In reality, this worst case shouldn't be hit, and finding the "best"
          * fuzzy match in lines of text > 100 characters isn't really in scope
-         * for a dmenu clone.
+         * for a dwdmenu clone.
          */
         bool first_match_only = slen > 100;
 

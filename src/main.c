@@ -13,7 +13,7 @@
 #include <wayland-client.h>
 #include <wayland-util.h>
 #include <xkbcommon/xkbcommon.h>
-#include "tofi.h"
+#include "wdmenu.h"
 #include "compgen.h"
 #include "drun.h"
 #include "config.h"
@@ -92,7 +92,7 @@ static void zwlr_layer_surface_configure(
 		uint32_t width,
 		uint32_t height)
 {
-	struct tofi *tofi = data;
+	struct wdmenu *wdmenu = data;
 	if (width == 0 || height == 0) {
 		/* Compositor is deferring to us, so don't do anything. */
 		log_debug("Layer surface configure with no width or height.\n");
@@ -105,16 +105,16 @@ static void zwlr_layer_surface_configure(
 	 * We want actual pixel width / height, so we have to scale the
 	 * values provided by Wayland.
 	 */
-	if (tofi->window.fractional_scale != 0) {
-		tofi->window.surface.width = scale_apply(width, tofi->window.fractional_scale);
-		tofi->window.surface.height = scale_apply(height, tofi->window.fractional_scale);
+	if (wdmenu->window.fractional_scale != 0) {
+		wdmenu->window.surface.width = scale_apply(width, wdmenu->window.fractional_scale);
+		wdmenu->window.surface.height = scale_apply(height, wdmenu->window.fractional_scale);
 	} else {
-		tofi->window.surface.width = width * tofi->window.scale;
-		tofi->window.surface.height = height * tofi->window.scale;
+		wdmenu->window.surface.width = width * wdmenu->window.scale;
+		wdmenu->window.surface.height = height * wdmenu->window.scale;
 	}
 
 	zwlr_layer_surface_v1_ack_configure(
-			tofi->window.zwlr_layer_surface,
+			wdmenu->window.zwlr_layer_surface,
 			serial);
 }
 
@@ -122,8 +122,8 @@ static void zwlr_layer_surface_close(
 		void *data,
 		struct zwlr_layer_surface_v1 *zwlr_layer_surface)
 {
-	struct tofi *tofi = data;
-	tofi->closed = true;
+	struct wdmenu *wdmenu = data;
+	wdmenu->closed = true;
 	log_debug("Layer surface close.\n");
 }
 
@@ -139,19 +139,19 @@ static void wl_keyboard_keymap(
 		int32_t fd,
 		uint32_t size)
 {
-	struct tofi *tofi = data;
+	struct wdmenu *wdmenu = data;
 	assert(format == WL_KEYBOARD_KEYMAP_FORMAT_XKB_V1);
 
 	char *map_shm = mmap(NULL, size, PROT_READ, MAP_PRIVATE, fd, 0);
 	assert(map_shm != MAP_FAILED);
 
-	if (tofi->late_keyboard_init) {
+	if (wdmenu->late_keyboard_init) {
 		log_debug("Delaying keyboard configuration.\n");
-		tofi->xkb_keymap_string = xstrdup(map_shm);
+		wdmenu->xkb_keymap_string = xstrdup(map_shm);
 	} else {
 		log_debug("Configuring keyboard.\n");
 		struct xkb_keymap *xkb_keymap = xkb_keymap_new_from_string(
-				tofi->xkb_context,
+				wdmenu->xkb_context,
 				map_shm,
 				XKB_KEYMAP_FORMAT_TEXT_V1,
 				XKB_KEYMAP_COMPILE_NO_FLAGS);
@@ -159,10 +159,10 @@ static void wl_keyboard_keymap(
 		close(fd);
 
 		struct xkb_state *xkb_state = xkb_state_new(xkb_keymap);
-		xkb_keymap_unref(tofi->xkb_keymap);
-		xkb_state_unref(tofi->xkb_state);
-		tofi->xkb_keymap = xkb_keymap;
-		tofi->xkb_state = xkb_state;
+		xkb_keymap_unref(wdmenu->xkb_keymap);
+		xkb_state_unref(wdmenu->xkb_state);
+		wdmenu->xkb_keymap = xkb_keymap;
+		wdmenu->xkb_state = xkb_state;
 		log_debug("Keyboard configured.\n");
 	}
 	munmap(map_shm, size);
@@ -196,7 +196,7 @@ static void wl_keyboard_key(
 		uint32_t key,
 		uint32_t state)
 {
-	struct tofi *tofi = data;
+	struct wdmenu *wdmenu = data;
 
 	/*
 	 * If this wasn't a keypress (i.e. was a key release), just update key
@@ -204,21 +204,21 @@ static void wl_keyboard_key(
 	 */
 	uint32_t keycode = key + 8;
 	if (state != WL_KEYBOARD_KEY_STATE_PRESSED) {
-		if (keycode == tofi->repeat.keycode) {
-			tofi->repeat.active = false;
+		if (keycode == wdmenu->repeat.keycode) {
+			wdmenu->repeat.active = false;
 		} else {
-			tofi->repeat.next = gettime_ms() + tofi->repeat.delay;
+			wdmenu->repeat.next = gettime_ms() + wdmenu->repeat.delay;
 		}
 		return;
 	}
 
 	/* A rate of 0 disables key repeat */
-	if (xkb_keymap_key_repeats(tofi->xkb_keymap, keycode) && tofi->repeat.rate != 0) {
-		tofi->repeat.active = true;
-		tofi->repeat.keycode = keycode;
-		tofi->repeat.next = gettime_ms() + tofi->repeat.delay;
+	if (xkb_keymap_key_repeats(wdmenu->xkb_keymap, keycode) && wdmenu->repeat.rate != 0) {
+		wdmenu->repeat.active = true;
+		wdmenu->repeat.keycode = keycode;
+		wdmenu->repeat.next = gettime_ms() + wdmenu->repeat.delay;
 	}
-	input_handle_keypress(tofi, keycode);
+	input_handle_keypress(wdmenu, keycode);
 }
 
 static void wl_keyboard_modifiers(
@@ -230,12 +230,12 @@ static void wl_keyboard_modifiers(
 		uint32_t mods_locked,
 		uint32_t group)
 {
-	struct tofi *tofi = data;
-	if (tofi->xkb_state == NULL) {
+	struct wdmenu *wdmenu = data;
+	if (wdmenu->xkb_state == NULL) {
 		return;
 	}
 	xkb_state_update_mask(
-			tofi->xkb_state,
+			wdmenu->xkb_state,
 			mods_depressed,
 			mods_latched,
 			mods_locked,
@@ -250,9 +250,9 @@ static void wl_keyboard_repeat_info(
 		int32_t rate,
 		int32_t delay)
 {
-	struct tofi *tofi = data;
-	tofi->repeat.rate = rate;
-	tofi->repeat.delay = delay;
+	struct wdmenu *wdmenu = data;
+	wdmenu->repeat.rate = rate;
+	wdmenu->repeat.delay = delay;
 	if (rate > 0) {
 		log_debug("Key repeat every %u ms after %u ms.\n",
 				1000 / rate,
@@ -279,10 +279,10 @@ static void wl_pointer_enter(
 		wl_fixed_t surface_x,
 		wl_fixed_t surface_y)
 {
-	struct tofi *tofi = data;
-	if (tofi->hide_cursor) {
+	struct wdmenu *wdmenu = data;
+	if (wdmenu->hide_cursor) {
 		/* Hide the cursor by setting its surface to NULL. */
-		wl_pointer_set_cursor(tofi->wl_pointer, serial, NULL, 0, 0);
+		wl_pointer_set_cursor(wdmenu->wl_pointer, serial, NULL, 0, 0);
 	}
 }
 
@@ -374,34 +374,34 @@ static void wl_seat_capabilities(
 		struct wl_seat *wl_seat,
 		uint32_t capabilities)
 {
-	struct tofi *tofi = data;
+	struct wdmenu *wdmenu = data;
 
 	bool have_keyboard = capabilities & WL_SEAT_CAPABILITY_KEYBOARD;
 	bool have_pointer = capabilities & WL_SEAT_CAPABILITY_POINTER;
 
-	if (have_keyboard && tofi->wl_keyboard == NULL) {
-		tofi->wl_keyboard = wl_seat_get_keyboard(tofi->wl_seat);
+	if (have_keyboard && wdmenu->wl_keyboard == NULL) {
+		wdmenu->wl_keyboard = wl_seat_get_keyboard(wdmenu->wl_seat);
 		wl_keyboard_add_listener(
-				tofi->wl_keyboard,
+				wdmenu->wl_keyboard,
 				&wl_keyboard_listener,
-				tofi);
+				wdmenu);
 		log_debug("Got keyboard from seat.\n");
-	} else if (!have_keyboard && tofi->wl_keyboard != NULL) {
-		wl_keyboard_release(tofi->wl_keyboard);
-		tofi->wl_keyboard = NULL;
+	} else if (!have_keyboard && wdmenu->wl_keyboard != NULL) {
+		wl_keyboard_release(wdmenu->wl_keyboard);
+		wdmenu->wl_keyboard = NULL;
 		log_debug("Released keyboard.\n");
 	}
 
-	if (have_pointer && tofi->wl_pointer == NULL) {
-		tofi->wl_pointer = wl_seat_get_pointer(tofi->wl_seat);
+	if (have_pointer && wdmenu->wl_pointer == NULL) {
+		wdmenu->wl_pointer = wl_seat_get_pointer(wdmenu->wl_seat);
 		wl_pointer_add_listener(
-				tofi->wl_pointer,
+				wdmenu->wl_pointer,
 				&wl_pointer_listener,
-				tofi);
+				wdmenu);
 		log_debug("Got pointer from seat.\n");
-	} else if (!have_pointer && tofi->wl_pointer != NULL) {
-		wl_pointer_release(tofi->wl_pointer);
-		tofi->wl_pointer = NULL;
+	} else if (!have_pointer && wdmenu->wl_pointer != NULL) {
+		wl_pointer_release(wdmenu->wl_pointer);
+		wdmenu->wl_pointer = NULL;
 		log_debug("Released pointer.\n");
 	}
 }
@@ -545,9 +545,9 @@ static void output_geometry(
 		const char *model,
 		int32_t transform)
 {
-	struct tofi *tofi = data;
+	struct wdmenu *wdmenu = data;
 	struct output_list_element *el;
-	wl_list_for_each(el, &tofi->output_list, link) {
+	wl_list_for_each(el, &wdmenu->output_list, link) {
 		if (el->wl_output == wl_output) {
 			el->transform = transform;
 		}
@@ -562,9 +562,9 @@ static void output_mode(
 		int32_t height,
 		int32_t refresh)
 {
-	struct tofi *tofi = data;
+	struct wdmenu *wdmenu = data;
 	struct output_list_element *el;
-	wl_list_for_each(el, &tofi->output_list, link) {
+	wl_list_for_each(el, &wdmenu->output_list, link) {
 		if (el->wl_output == wl_output) {
 			if (flags & WL_OUTPUT_MODE_CURRENT) {
 				el->width = width;
@@ -579,9 +579,9 @@ static void output_scale(
 		struct wl_output *wl_output,
 		int32_t factor)
 {
-	struct tofi *tofi = data;
+	struct wdmenu *wdmenu = data;
 	struct output_list_element *el;
-	wl_list_for_each(el, &tofi->output_list, link) {
+	wl_list_for_each(el, &wdmenu->output_list, link) {
 		if (el->wl_output == wl_output) {
 			el->scale = factor;
 		}
@@ -593,9 +593,9 @@ static void output_name(
 		struct wl_output *wl_output,
 		const char *name)
 {
-	struct tofi *tofi = data;
+	struct wdmenu *wdmenu = data;
 	struct output_list_element *el;
-	wl_list_for_each(el, &tofi->output_list, link) {
+	wl_list_for_each(el, &wdmenu->output_list, link) {
 		if (el->wl_output == wl_output) {
 			el->name = xstrdup(name);
 		}
@@ -633,25 +633,25 @@ static void registry_global(
 		const char *interface,
 		uint32_t version)
 {
-	struct tofi *tofi = data;
+	struct wdmenu *wdmenu = data;
 	//log_debug("Registry %u: %s v%u.\n", name, interface, version);
 	if (!strcmp(interface, wl_compositor_interface.name)) {
-		tofi->wl_compositor = wl_registry_bind(
+		wdmenu->wl_compositor = wl_registry_bind(
 				wl_registry,
 				name,
 				&wl_compositor_interface,
 				4);
 		log_debug("Bound to compositor %u.\n", name);
 	} else if (!strcmp(interface, wl_seat_interface.name)) {
-		tofi->wl_seat = wl_registry_bind(
+		wdmenu->wl_seat = wl_registry_bind(
 				wl_registry,
 				name,
 				&wl_seat_interface,
 				7);
 		wl_seat_add_listener(
-				tofi->wl_seat,
+				wdmenu->wl_seat,
 				&wl_seat_listener,
-				tofi);
+				wdmenu);
 		log_debug("Bound to seat %u.\n", name);
 	} else if (!strcmp(interface, wl_output_interface.name)) {
 		struct output_list_element *el = xmalloc(sizeof(*el));
@@ -670,18 +670,18 @@ static void registry_global(
 		wl_output_add_listener(
 				el->wl_output,
 				&wl_output_listener,
-				tofi);
-		wl_list_insert(&tofi->output_list, &el->link);
+				wdmenu);
+		wl_list_insert(&wdmenu->output_list, &el->link);
 		log_debug("Bound to output %u.\n", name);
 	} else if (!strcmp(interface, wl_shm_interface.name)) {
-		tofi->wl_shm = wl_registry_bind(
+		wdmenu->wl_shm = wl_registry_bind(
 				wl_registry,
 				name,
 				&wl_shm_interface,
 				1);
 		log_debug("Bound to shm %u.\n", name);
 	} else if (!strcmp(interface, wl_data_device_manager_interface.name)) {
-		tofi->wl_data_device_manager = wl_registry_bind(
+		wdmenu->wl_data_device_manager = wl_registry_bind(
 				wl_registry,
 				name,
 				&wl_data_device_manager_interface,
@@ -694,21 +694,21 @@ static void registry_global(
 		} else {
 			version = 3;
 		}
-		tofi->zwlr_layer_shell = wl_registry_bind(
+		wdmenu->zwlr_layer_shell = wl_registry_bind(
 				wl_registry,
 				name,
 				&zwlr_layer_shell_v1_interface,
 				version);
 		log_debug("Bound to zwlr_layer_shell_v1 %u.\n", name);
 	} else if (!strcmp(interface, wp_viewporter_interface.name)) {
-		tofi->wp_viewporter = wl_registry_bind(
+		wdmenu->wp_viewporter = wl_registry_bind(
 				wl_registry,
 				name,
 				&wp_viewporter_interface,
 				1);
 		log_debug("Bound to wp_viewporter %u.\n", name);
 	} else if (!strcmp(interface, wp_fractional_scale_manager_v1_interface.name)) {
-		tofi->wp_fractional_scale_manager = wl_registry_bind(
+		wdmenu->wp_fractional_scale_manager = wl_registry_bind(
 				wl_registry,
 				name,
 				&wp_fractional_scale_manager_v1_interface,
@@ -783,8 +783,8 @@ static void dummy_fractional_scale_preferred_scale(
 		struct wp_fractional_scale_v1 *wp_fractional_scale,
 		uint32_t scale)
 {
-	struct tofi *tofi = data;
-	tofi->window.fractional_scale = scale;
+	struct wdmenu *wdmenu = data;
+	wdmenu->window.fractional_scale = scale;
 }
 
 static const struct wp_fractional_scale_v1_listener dummy_fractional_scale_listener = {
@@ -796,11 +796,11 @@ static void dummy_surface_enter(
 		struct wl_surface *wl_surface,
 		struct wl_output *wl_output)
 {
-	struct tofi *tofi = data;
+	struct wdmenu *wdmenu = data;
 	struct output_list_element *el;
-	wl_list_for_each(el, &tofi->output_list, link) {
+	wl_list_for_each(el, &wdmenu->output_list, link) {
 		if (el->wl_output == wl_output) {
-			tofi->default_output = el;
+			wdmenu->default_output = el;
 			break;
 		}
 	}
@@ -823,7 +823,7 @@ static const struct wl_surface_listener dummy_surface_listener = {
 static void usage(bool err)
 {
 	fprintf(err ? stderr : stdout, "%s",
-"Usage: tofi [options]\n"
+"Usage: wdmenu [options]\n"
 "\n"
 "Basic options:\n"
 "  -h, --help                           Print this message and exit.\n"
@@ -835,7 +835,7 @@ static void usage(bool err)
 "      --anchor <position>              Location on screen to anchor window.\n"
 "      --horizontal <true|false>        List results horizontally.\n"
 "\n"
-"All options listed in \"man 5 tofi\" are also accpted in the form \"--key=value\".\n"
+"All options listed in \"man 5 wdmenu\" are also accpted in the form \"--key=value\".\n"
 	);
 }
 
@@ -931,7 +931,7 @@ const struct option long_options[] = {
 };
 const char *short_options = ":hc:";
 
-static void parse_args(struct tofi *tofi, int argc, char *argv[])
+static void parse_args(struct wdmenu *wdmenu, int argc, char *argv[])
 {
 
 	bool load_default_config = true;
@@ -948,7 +948,7 @@ static void parse_args(struct tofi *tofi, int argc, char *argv[])
 			usage(false);
 			exit(EXIT_SUCCESS);
 		} else if (opt == 'c') {
-			config_load(tofi, optarg);
+			config_load(wdmenu, optarg);
 			load_default_config = false;
 		} else if (opt == ':') {
 			log_error("Option %s requires an argument.\n", argv[optind - 1]);
@@ -966,7 +966,7 @@ static void parse_args(struct tofi *tofi, int argc, char *argv[])
 		opt = getopt_long(argc, argv, short_options, long_options, &option_index);
 	}
 	if (load_default_config) {
-		config_load(tofi, NULL);
+		config_load(wdmenu, NULL);
 	}
 
 	/* Second pass, parse everything else. */
@@ -974,7 +974,7 @@ static void parse_args(struct tofi *tofi, int argc, char *argv[])
 	opt = getopt_long(argc, argv, short_options, long_options, &option_index);
 	while (opt != -1) {
 		if (opt == 0) {
-			if (!config_apply(tofi, long_options[option_index].name, optarg)) {
+			if (!config_apply(wdmenu, long_options[option_index].name, optarg)) {
 				exit(EXIT_FAILURE);
 			}
 		} else if (opt == 'k') {
@@ -983,11 +983,11 @@ static void parse_args(struct tofi *tofi, int argc, char *argv[])
 			 * taking an argument.
 			 */
 			if (optarg) {
-				if (!config_apply(tofi, long_options[option_index].name, optarg)) {
+				if (!config_apply(wdmenu, long_options[option_index].name, optarg)) {
 					exit(EXIT_FAILURE);
 				}
 			} else {
-				tofi->late_keyboard_init = true;
+				wdmenu->late_keyboard_init = true;
 			}
 		}
 		opt = getopt_long(argc, argv, short_options, long_options, &option_index);
@@ -1000,15 +1000,15 @@ static void parse_args(struct tofi *tofi, int argc, char *argv[])
 	}
 }
 
-static bool do_submit(struct tofi *tofi)
+static bool do_submit(struct wdmenu *wdmenu)
 {
-	struct entry *entry = &tofi->window.entry;
+	struct entry *entry = &wdmenu->window.entry;
 	uint32_t selection = entry->selection + entry->first_result;
 	char *res = entry->results.buf[selection].string;
 
-	if (tofi->window.entry.results.count == 0) {
+	if (wdmenu->window.entry.results.count == 0) {
 		/* Always require a match in drun mode. */
-		if (tofi->require_match || entry->mode == TOFI_MODE_DRUN) {
+		if (wdmenu->require_match || entry->mode == TOFI_MODE_DRUN) {
 			return false;
 		} else {
 			printf("%s\n", entry->input_utf8);
@@ -1034,13 +1034,13 @@ static bool do_submit(struct tofi *tofi)
 			return false;
 		}
 		char *path = app->path;
-		if (tofi->drun_launch) {
+		if (wdmenu->drun_launch) {
 			drun_launch(path);
 		} else {
-			drun_print(path, tofi->default_terminal);
+			drun_print(path, wdmenu->default_terminal);
 		}
 	} else {
-		if (entry->mode == TOFI_MODE_PLAIN && tofi->print_index) {
+		if (entry->mode == TOFI_MODE_PLAIN && wdmenu->print_index) {
 			for (size_t i = 0; i < entry->commands.count; i++) {
 				if (res == entry->commands.buf[i].string) {
 					printf("%zu\n", i + 1);
@@ -1051,22 +1051,22 @@ static bool do_submit(struct tofi *tofi)
 			printf("%s\n", res);
 		}
 	}
-	if (tofi->use_history) {
+	if (wdmenu->use_history) {
 		history_add(
 				&entry->history,
 				entry->results.buf[selection].string);
-		if (tofi->history_file[0] == 0) {
+		if (wdmenu->history_file[0] == 0) {
 			history_save_default_file(&entry->history, entry->mode == TOFI_MODE_DRUN);
 		} else {
-			history_save(&entry->history, tofi->history_file);
+			history_save(&entry->history, wdmenu->history_file);
 		}
 	}
 	return true;
 }
 
-static void read_clipboard(struct tofi *tofi)
+static void read_clipboard(struct wdmenu *wdmenu)
 {
-	struct entry *entry = &tofi->window.entry;
+	struct entry *entry = &wdmenu->window.entry;
 
 	/* Make a copy of any text after the cursor. */
 	uint32_t *end_text = NULL;
@@ -1088,7 +1088,7 @@ static void read_clipboard(struct tofi *tofi)
 			 * Read input 1 byte at a time. This is slow, but easy,
 			 * and speed of pasting shouldn't really matter.
 			 */
-			int res = read(tofi->clipboard.fd, &buffer[i], 1);
+			int res = read(wdmenu->clipboard.fd, &buffer[i], 1);
 			if (res == 0) {
 				eof = true;
 				break;
@@ -1104,12 +1104,12 @@ static void read_clipboard(struct tofi *tofi)
 					 * a character, but we should hit the
 					 * input length limit long before that.
 					 */
-					input_refresh_results(tofi);
-					tofi->window.surface.redraw = true;
+					input_refresh_results(wdmenu);
+					wdmenu->window.surface.redraw = true;
 					return;
 				}
 				log_error("Failed to read clipboard: %s\n", strerror(errno));
-				clipboard_finish_paste(&tofi->clipboard);
+				clipboard_finish_paste(&wdmenu->clipboard);
 				return;
 			}
 			uint32_t unichar = utf8_to_utf32_validate(buffer);
@@ -1145,16 +1145,16 @@ static void read_clipboard(struct tofi *tofi)
 	}
 	entry->input_utf32[MIN(entry->input_utf32_length, N_ELEM(entry->input_utf32) - 1)] = U'\0';
 
-	clipboard_finish_paste(&tofi->clipboard);
+	clipboard_finish_paste(&wdmenu->clipboard);
 
-	input_refresh_results(tofi);
-	tofi->window.surface.redraw = true;
+	input_refresh_results(wdmenu);
+	wdmenu->window.surface.redraw = true;
 }
 
 int main(int argc, char *argv[])
 {
 	/* Call log_debug to initialise the timers we use for perf checking. */
-	log_debug("This is tofi.\n");
+	log_debug("This is wdmenu.\n");
 
 	/*
 	 * Set the locale to the user's default, so we can deal with non-ASCII
@@ -1163,7 +1163,7 @@ int main(int argc, char *argv[])
 	setlocale(LC_ALL, "");
 
 	/* Default options. */
-	struct tofi tofi = {
+	struct wdmenu wdmenu = {
 		.window = {
 			.scale = 1,
 			.width = 1280,
@@ -1201,20 +1201,20 @@ int main(int argc, char *argv[])
 		.use_scale = true,
 		.physical_keybindings = true,
 	};
-	wl_list_init(&tofi.output_list);
+	wl_list_init(&wdmenu.output_list);
 	if (getenv("TERMINAL") != NULL) {
 		snprintf(
-				tofi.default_terminal,
-				N_ELEM(tofi.default_terminal),
+				wdmenu.default_terminal,
+				N_ELEM(wdmenu.default_terminal),
 				"%s",
 				getenv("TERMINAL"));
 	}
 
-	parse_args(&tofi, argc, argv);
+	parse_args(&wdmenu, argc, argv);
 	log_debug("Config done.\n");
 
-	if (!tofi.multiple_instance && lock_check()) {
-		log_error("Another instance of tofi is already running.\n");
+	if (!wdmenu.multiple_instance && lock_check()) {
+		log_error("Another instance of wdmenu is already running.\n");
 		exit(EXIT_FAILURE);
 	}
 
@@ -1226,24 +1226,24 @@ int main(int argc, char *argv[])
 	 */
 
 	log_debug("Connecting to Wayland display.\n");
-	tofi.wl_display = wl_display_connect(NULL);
-	if (tofi.wl_display == NULL) {
+	wdmenu.wl_display = wl_display_connect(NULL);
+	if (wdmenu.wl_display == NULL) {
 		log_error("Couldn't connect to Wayland display.\n");
 		exit(EXIT_FAILURE);
 	}
-	tofi.wl_registry = wl_display_get_registry(tofi.wl_display);
-	if (!tofi.late_keyboard_init) {
+	wdmenu.wl_registry = wl_display_get_registry(wdmenu.wl_display);
+	if (!wdmenu.late_keyboard_init) {
 		log_debug("Creating xkb context.\n");
-		tofi.xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
-		if (tofi.xkb_context == NULL) {
+		wdmenu.xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+		if (wdmenu.xkb_context == NULL) {
 			log_error("Couldn't create an XKB context.\n");
 			exit(EXIT_FAILURE);
 		}
 	}
 	wl_registry_add_listener(
-			tofi.wl_registry,
+			wdmenu.wl_registry,
 			&wl_registry_listener,
-			&tofi);
+			&wdmenu);
 
 	/*
 	 * After this first roundtrip, the only thing that should have happened
@@ -1252,7 +1252,7 @@ int main(int argc, char *argv[])
 	 */
 	log_debug("First roundtrip start.\n");
 	log_indent();
-	wl_display_roundtrip(tofi.wl_display);
+	wl_display_roundtrip(wdmenu.wl_display);
 	log_unindent();
 	log_debug("First roundtrip done.\n");
 
@@ -1263,7 +1263,7 @@ int main(int argc, char *argv[])
 	 */
 	log_debug("Second roundtrip start.\n");
 	log_indent();
-	wl_display_roundtrip(tofi.wl_display);
+	wl_display_roundtrip(wdmenu.wl_display);
 	log_unindent();
 	log_debug("Second roundtrip done.\n");
 
@@ -1282,9 +1282,9 @@ int main(int argc, char *argv[])
 		 * a surface and displaying it.
 		 *
 		 * Here we set up a single pixel surface, perform the required
-		 * two roundtrips, then tear it down. tofi.default_output
+		 * two roundtrips, then tear it down. wdmenu.default_output
 		 * should then contain the output our surface was assigned to,
-		 * and tofi.window.fractional_scale should have the scale
+		 * and wdmenu.window.fractional_scale should have the scale
 		 * factor.
 		 */
 		log_debug("Determining output.\n");
@@ -1294,22 +1294,22 @@ int main(int argc, char *argv[])
 			.height = 1
 		};
 		surface.wl_surface =
-			wl_compositor_create_surface(tofi.wl_compositor);
+			wl_compositor_create_surface(wdmenu.wl_compositor);
 		wl_surface_add_listener(
 				surface.wl_surface,
 				&dummy_surface_listener,
-				&tofi);
+				&wdmenu);
 
 		struct wp_fractional_scale_v1 *wp_fractional_scale = NULL;
-		if (tofi.wp_fractional_scale_manager != NULL) {
+		if (wdmenu.wp_fractional_scale_manager != NULL) {
 			wp_fractional_scale =
 				wp_fractional_scale_manager_v1_get_fractional_scale(
-						tofi.wp_fractional_scale_manager,
+						wdmenu.wp_fractional_scale_manager,
 						surface.wl_surface);
 			wp_fractional_scale_v1_add_listener(
 					wp_fractional_scale,
 					&dummy_fractional_scale_listener,
-					&tofi);
+					&wdmenu);
 		}
 
 		/*
@@ -1317,10 +1317,10 @@ int main(int argc, char *argv[])
 		 * can determine the correct fractional scale.
 		 */
 		struct wl_output *wl_output = NULL;
-		if (tofi.target_output_name[0] != '\0') {
+		if (wdmenu.target_output_name[0] != '\0') {
 			struct output_list_element *el;
-			wl_list_for_each(el, &tofi.output_list, link) {
-				if (!strcmp(tofi.target_output_name, el->name)) {
+			wl_list_for_each(el, &wdmenu.output_list, link) {
+				if (!strcmp(wdmenu.target_output_name, el->name)) {
 					wl_output = el->wl_output;
 					break;
 				}
@@ -1329,7 +1329,7 @@ int main(int argc, char *argv[])
 
 		struct zwlr_layer_surface_v1 *zwlr_layer_surface =
 			zwlr_layer_shell_v1_get_layer_surface(
-					tofi.zwlr_layer_shell,
+					wdmenu.zwlr_layer_shell,
 					surface.wl_surface,
 					wl_output,
 					ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND,
@@ -1345,7 +1345,7 @@ int main(int argc, char *argv[])
 		zwlr_layer_surface_v1_add_listener(
 				zwlr_layer_surface,
 				&dummy_layer_surface_listener,
-				&tofi);
+				&wdmenu);
 		zwlr_layer_surface_v1_set_size(
 				zwlr_layer_surface,
 				1,
@@ -1353,18 +1353,18 @@ int main(int argc, char *argv[])
 		wl_surface_commit(surface.wl_surface);
 		log_debug("First dummy roundtrip start.\n");
 		log_indent();
-		wl_display_roundtrip(tofi.wl_display);
+		wl_display_roundtrip(wdmenu.wl_display);
 		log_unindent();
 		log_debug("First dummy roundtrip done.\n");
 		log_debug("Initialising dummy surface.\n");
 		log_indent();
-		surface_init(&surface, tofi.wl_shm);
+		surface_init(&surface, wdmenu.wl_shm);
 		surface_draw(&surface);
 		log_unindent();
 		log_debug("Dummy surface initialised.\n");
 		log_debug("Second dummy roundtrip start.\n");
 		log_indent();
-		wl_display_roundtrip(tofi.wl_display);
+		wl_display_roundtrip(wdmenu.wl_display);
 		log_unindent();
 		log_debug("Second dummy roundtrip done.\n");
 		surface_destroy(&surface);
@@ -1381,23 +1381,23 @@ int main(int argc, char *argv[])
 		 */
 		bool found_target = false;
 		struct output_list_element *head;
-		head = wl_container_of(tofi.output_list.next, head, link);
+		head = wl_container_of(wdmenu.output_list.next, head, link);
 
 		struct output_list_element *el;
 		struct output_list_element *tmp;
-		if (tofi.target_output_name[0] != 0) {
-			log_debug("Looking for output %s.\n", tofi.target_output_name);
-		} else if (tofi.default_output != NULL) {
+		if (wdmenu.target_output_name[0] != 0) {
+			log_debug("Looking for output %s.\n", wdmenu.target_output_name);
+		} else if (wdmenu.default_output != NULL) {
 			snprintf(
-					tofi.target_output_name,
-					N_ELEM(tofi.target_output_name),
+					wdmenu.target_output_name,
+					N_ELEM(wdmenu.target_output_name),
 					"%s",
-					tofi.default_output->name);
+					wdmenu.default_output->name);
 			/* We don't need this anymore. */
-			tofi.default_output = NULL;
+			wdmenu.default_output = NULL;
 		}
-		wl_list_for_each_reverse_safe(el, tmp, &tofi.output_list, link) {
-			if (!strcmp(tofi.target_output_name, el->name)) {
+		wl_list_for_each_reverse_safe(el, tmp, &wdmenu.output_list, link) {
+			if (!strcmp(wdmenu.target_output_name, el->name)) {
 				found_target = true;
 				continue;
 			}
@@ -1418,7 +1418,7 @@ int main(int argc, char *argv[])
 		 * The only output left should either be the one we want, or
 		 * the first that was advertised.
 		 */
-		el = wl_container_of(tofi.output_list.next, el, link);
+		el = wl_container_of(wdmenu.output_list.next, el, link);
 
 		/*
 		 * If we're rotated 90 degrees, we need to swap width and
@@ -1429,15 +1429,15 @@ int main(int argc, char *argv[])
 			case WL_OUTPUT_TRANSFORM_270:
 			case WL_OUTPUT_TRANSFORM_FLIPPED_90:
 			case WL_OUTPUT_TRANSFORM_FLIPPED_270:
-				tofi.output_width = el->height;
-				tofi.output_height = el->width;
+				wdmenu.output_width = el->height;
+				wdmenu.output_height = el->width;
 				break;
 			default:
-				tofi.output_width = el->width;
-				tofi.output_height = el->height;
+				wdmenu.output_width = el->width;
+				wdmenu.output_height = el->height;
 		}
-		tofi.window.scale = el->scale;
-		tofi.window.transform = el->transform;
+		wdmenu.window.scale = el->scale;
+		wdmenu.window.transform = el->transform;
 		log_unindent();
 		log_debug("Selected output %s.\n", el->name);
 	}
@@ -1446,73 +1446,73 @@ int main(int argc, char *argv[])
 	 * We can now scale values and calculate any percentages, as we know
 	 * the output size and scale.
 	 */
-	config_fixup_values(&tofi);
+	config_fixup_values(&wdmenu);
 
 	/*
-	 * If we were invoked as tofi-run, generate the command list.
-	 * If we were invoked as tofi-drun, generate the desktop app list.
+	 * If we were invoked as wdmenu-run, generate the command list.
+	 * If we were invoked as wdmenu-drun, generate the desktop app list.
 	 * Otherwise, just read standard input.
 	 */
 	if (strstr(argv[0], "-run")) {
 		log_debug("Generating command list.\n");
 		log_indent();
-		tofi.window.entry.mode = TOFI_MODE_RUN;
-		tofi.window.entry.command_buffer = compgen_cached();
-		struct string_ref_vec commands = string_ref_vec_from_buffer(tofi.window.entry.command_buffer);
-		if (tofi.use_history) {
-			if (tofi.history_file[0] == 0) {
-				tofi.window.entry.history = history_load_default_file(false);
+		wdmenu.window.entry.mode = TOFI_MODE_RUN;
+		wdmenu.window.entry.command_buffer = compgen_cached();
+		struct string_ref_vec commands = string_ref_vec_from_buffer(wdmenu.window.entry.command_buffer);
+		if (wdmenu.use_history) {
+			if (wdmenu.history_file[0] == 0) {
+				wdmenu.window.entry.history = history_load_default_file(false);
 			} else {
-				tofi.window.entry.history = history_load(tofi.history_file);
+				wdmenu.window.entry.history = history_load(wdmenu.history_file);
 			}
-			tofi.window.entry.commands = compgen_history_sort(&commands, &tofi.window.entry.history);
+			wdmenu.window.entry.commands = compgen_history_sort(&commands, &wdmenu.window.entry.history);
 			string_ref_vec_destroy(&commands);
 		} else {
-			tofi.window.entry.commands = commands;
+			wdmenu.window.entry.commands = commands;
 		}
 		log_unindent();
 		log_debug("Command list generated.\n");
 	} else if (strstr(argv[0], "-drun")) {
 		log_debug("Generating desktop app list.\n");
 		log_indent();
-		tofi.window.entry.mode = TOFI_MODE_DRUN;
+		wdmenu.window.entry.mode = TOFI_MODE_DRUN;
 		struct desktop_vec apps = drun_generate_cached();
-		if (tofi.use_history) {
-			if (tofi.history_file[0] == 0) {
-				tofi.window.entry.history = history_load_default_file(true);
+		if (wdmenu.use_history) {
+			if (wdmenu.history_file[0] == 0) {
+				wdmenu.window.entry.history = history_load_default_file(true);
 			} else {
-				tofi.window.entry.history = history_load(tofi.history_file);
+				wdmenu.window.entry.history = history_load(wdmenu.history_file);
 			}
-			drun_history_sort(&apps, &tofi.window.entry.history);
+			drun_history_sort(&apps, &wdmenu.window.entry.history);
 		}
 		struct string_ref_vec commands = string_ref_vec_create();
 		for (size_t i = 0; i < apps.count; i++) {
 			string_ref_vec_add(&commands, apps.buf[i].name);
 		}
-		tofi.window.entry.commands = commands;
-		tofi.window.entry.apps = apps;
+		wdmenu.window.entry.commands = commands;
+		wdmenu.window.entry.apps = apps;
 		log_unindent();
 		log_debug("App list generated.\n");
 	} else {
 		log_debug("Reading stdin.\n");
-		char *buf = read_stdin(!tofi.ascii_input);
-		tofi.window.entry.command_buffer = buf;
-		tofi.window.entry.commands = string_ref_vec_from_buffer(buf);
-		if (tofi.use_history) {
-			if (tofi.history_file[0] == 0) {
-				tofi.use_history = false;
+		char *buf = read_stdin(!wdmenu.ascii_input);
+		wdmenu.window.entry.command_buffer = buf;
+		wdmenu.window.entry.commands = string_ref_vec_from_buffer(buf);
+		if (wdmenu.use_history) {
+			if (wdmenu.history_file[0] == 0) {
+				wdmenu.use_history = false;
 			} else {
-				tofi.window.entry.history = history_load(tofi.history_file);
-				string_ref_vec_history_sort(&tofi.window.entry.commands, &tofi.window.entry.history);
+				wdmenu.window.entry.history = history_load(wdmenu.history_file);
+				string_ref_vec_history_sort(&wdmenu.window.entry.commands, &wdmenu.window.entry.history);
 			}
 		}
 		log_debug("Result list generated.\n");
 	}
-	tofi.window.entry.results = string_ref_vec_copy(&tofi.window.entry.commands);
+	wdmenu.window.entry.results = string_ref_vec_copy(&wdmenu.window.entry.commands);
 
-	if (tofi.auto_accept_single && tofi.window.entry.results.count == 1) {
+	if (wdmenu.auto_accept_single && wdmenu.window.entry.results.count == 1) {
 		log_debug("Only one result, exiting.\n");
-		do_submit(&tofi);
+		do_submit(&wdmenu);
 		return EXIT_SUCCESS;
 	}
 
@@ -1521,13 +1521,13 @@ int main(int argc, char *argv[])
 	 * layer shell role.
 	 */
 	log_debug("Creating main window surface.\n");
-	tofi.window.surface.wl_surface =
-		wl_compositor_create_surface(tofi.wl_compositor);
+	wdmenu.window.surface.wl_surface =
+		wl_compositor_create_surface(wdmenu.wl_compositor);
 	wl_surface_add_listener(
-			tofi.window.surface.wl_surface,
+			wdmenu.window.surface.wl_surface,
 			&wl_surface_listener,
-			&tofi);
-	if (tofi.window.width == 0 || tofi.window.height == 0) {
+			&wdmenu);
+	if (wdmenu.window.width == 0 || wdmenu.window.height == 0) {
 		/*
 		 * Workaround for compatibility with legacy behaviour.
 		 *
@@ -1547,11 +1547,11 @@ int main(int argc, char *argv[])
 		 */
 		log_warning("Width or height set to 0, disabling fractional scaling support.\n");
 		log_warning("If your compositor supports the fractional scale protocol, percentages are preferred.\n");
-		tofi.window.fractional_scale = 0;
+		wdmenu.window.fractional_scale = 0;
 		wl_surface_set_buffer_scale(
-				tofi.window.surface.wl_surface,
-				tofi.window.scale);
-	} else if (tofi.wp_viewporter == NULL) {
+				wdmenu.window.surface.wl_surface,
+				wdmenu.window.scale);
+	} else if (wdmenu.wp_viewporter == NULL) {
 		/*
 		 * We also could be running on a Wayland compositor which
 		 * doesn't support wp_viewporter, in which case we need to use
@@ -1559,84 +1559,84 @@ int main(int argc, char *argv[])
 		 */
 		log_warning("Using an outdated compositor, "
 				"fractional scaling will not work properly.\n");
-		tofi.window.fractional_scale = 0;
+		wdmenu.window.fractional_scale = 0;
 		wl_surface_set_buffer_scale(
-				tofi.window.surface.wl_surface,
-				tofi.window.scale);
+				wdmenu.window.surface.wl_surface,
+				wdmenu.window.scale);
 	}
 
 	/* Grab the first (and only remaining) output from our list. */
 	struct wl_output *wl_output;
 	{
 		struct output_list_element *el;
-		el = wl_container_of(tofi.output_list.next, el, link);
+		el = wl_container_of(wdmenu.output_list.next, el, link);
 		wl_output = el->wl_output;
 	}
 
-	tofi.window.zwlr_layer_surface = zwlr_layer_shell_v1_get_layer_surface(
-			tofi.zwlr_layer_shell,
-			tofi.window.surface.wl_surface,
+	wdmenu.window.zwlr_layer_surface = zwlr_layer_shell_v1_get_layer_surface(
+			wdmenu.zwlr_layer_shell,
+			wdmenu.window.surface.wl_surface,
 			wl_output,
 			ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY,
 			"launcher");
 	zwlr_layer_surface_v1_set_keyboard_interactivity(
-			tofi.window.zwlr_layer_surface,
+			wdmenu.window.zwlr_layer_surface,
 			ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_EXCLUSIVE);
 	zwlr_layer_surface_v1_add_listener(
-			tofi.window.zwlr_layer_surface,
+			wdmenu.window.zwlr_layer_surface,
 			&zwlr_layer_surface_listener,
-			&tofi);
+			&wdmenu);
 	zwlr_layer_surface_v1_set_anchor(
-			tofi.window.zwlr_layer_surface,
-			tofi.anchor);
+			wdmenu.window.zwlr_layer_surface,
+			wdmenu.anchor);
 	zwlr_layer_surface_v1_set_exclusive_zone(
-			tofi.window.zwlr_layer_surface,
-			tofi.window.exclusive_zone);
+			wdmenu.window.zwlr_layer_surface,
+			wdmenu.window.exclusive_zone);
 	zwlr_layer_surface_v1_set_margin(
-			tofi.window.zwlr_layer_surface,
-			tofi.window.margin_top,
-			tofi.window.margin_right,
-			tofi.window.margin_bottom,
-			tofi.window.margin_left);
+			wdmenu.window.zwlr_layer_surface,
+			wdmenu.window.margin_top,
+			wdmenu.window.margin_right,
+			wdmenu.window.margin_bottom,
+			wdmenu.window.margin_left);
 	/*
 	 * No matter whether we're scaling via Cairo or not, we're presenting a
 	 * scaled buffer to Wayland, so scale the window size here if we
 	 * haven't already done so.
 	 */
 	zwlr_layer_surface_v1_set_size(
-			tofi.window.zwlr_layer_surface,
-			tofi.window.width,
-			tofi.window.height);
+			wdmenu.window.zwlr_layer_surface,
+			wdmenu.window.width,
+			wdmenu.window.height);
 
 	/*
 	 * Set up a viewport for our surface, necessary for fractional scaling.
 	 */
-	if (tofi.wp_viewporter != NULL) {
-		tofi.window.wp_viewport = wp_viewporter_get_viewport(
-				tofi.wp_viewporter,
-				tofi.window.surface.wl_surface);
-		if (tofi.window.width > 0 && tofi.window.height > 0) {
+	if (wdmenu.wp_viewporter != NULL) {
+		wdmenu.window.wp_viewport = wp_viewporter_get_viewport(
+				wdmenu.wp_viewporter,
+				wdmenu.window.surface.wl_surface);
+		if (wdmenu.window.width > 0 && wdmenu.window.height > 0) {
 			wp_viewport_set_destination(
-					tofi.window.wp_viewport,
-					tofi.window.width,
-					tofi.window.height);
+					wdmenu.window.wp_viewport,
+					wdmenu.window.width,
+					wdmenu.window.height);
 		}
 	}
 
 	/* Commit the surface to finalise setup. */
-	wl_surface_commit(tofi.window.surface.wl_surface);
+	wl_surface_commit(wdmenu.window.surface.wl_surface);
 
 	/*
 	 * Create a data device and setup a listener for data offers. This is
 	 * required for clipboard support.
 	 */
-	tofi.wl_data_device = wl_data_device_manager_get_data_device(
-			tofi.wl_data_device_manager,
-			tofi.wl_seat);
+	wdmenu.wl_data_device = wl_data_device_manager_get_data_device(
+			wdmenu.wl_data_device_manager,
+			wdmenu.wl_seat);
 	wl_data_device_add_listener(
-			tofi.wl_data_device,
+			wdmenu.wl_data_device,
 			&wl_data_device_listener,
-			&tofi.clipboard);
+			&wdmenu.clipboard);
 
 	/*
 	 * Now that we've done all our Wayland-related setup, we do another
@@ -1645,7 +1645,7 @@ int main(int argc, char *argv[])
 	 */
 	log_debug("Third roundtrip start.\n");
 	log_indent();
-	wl_display_roundtrip(tofi.wl_display);
+	wl_display_roundtrip(wdmenu.wl_display);
 	log_unindent();
 	log_debug("Third roundtrip done.\n");
 
@@ -1657,7 +1657,7 @@ int main(int argc, char *argv[])
 	 */
 	log_debug("Initialising window surface.\n");
 	log_indent();
-	surface_init(&tofi.window.surface, tofi.wl_shm);
+	surface_init(&wdmenu.window.surface, wdmenu.wl_shm);
 	log_unindent();
 	log_debug("Window surface initialised.\n");
 
@@ -1680,25 +1680,25 @@ int main(int argc, char *argv[])
 		 * ease.
 		 */
 		uint32_t scale = 120;
-		if (tofi.use_scale) {
-			if (tofi.window.fractional_scale != 0) {
-				scale = tofi.window.fractional_scale;
+		if (wdmenu.use_scale) {
+			if (wdmenu.window.fractional_scale != 0) {
+				scale = wdmenu.window.fractional_scale;
 			} else {
-				scale = tofi.window.scale * 120;
+				scale = wdmenu.window.scale * 120;
 			}
 		}
 		entry_init(
-				&tofi.window.entry,
-				tofi.window.surface.shm_pool_data,
-				tofi.window.surface.width,
-				tofi.window.surface.height,
+				&wdmenu.window.entry,
+				wdmenu.window.surface.shm_pool_data,
+				wdmenu.window.surface.width,
+				wdmenu.window.surface.height,
 				scale);
 	}
 	log_unindent();
 	log_debug("Renderer initialised.\n");
 
 	/* Perform an initial render. */
-	surface_draw(&tofi.window.surface);
+	surface_draw(&wdmenu.window.surface);
 
 	/*
 	 * entry_init() left the second of the two buffers we use for
@@ -1708,40 +1708,40 @@ int main(int argc, char *argv[])
 	 * the main loop. This ensures we paint to the screen as quickly as
 	 * possible after startup.
 	 */
-	wl_display_roundtrip(tofi.wl_display);
+	wl_display_roundtrip(wdmenu.wl_display);
 	log_debug("Initialising second buffer.\n");
 	memcpy(
-		cairo_image_surface_get_data(tofi.window.entry.cairo[1].surface),
-		cairo_image_surface_get_data(tofi.window.entry.cairo[0].surface),
-		tofi.window.surface.width * tofi.window.surface.height * sizeof(uint32_t)
+		cairo_image_surface_get_data(wdmenu.window.entry.cairo[1].surface),
+		cairo_image_surface_get_data(wdmenu.window.entry.cairo[0].surface),
+		wdmenu.window.surface.width * wdmenu.window.surface.height * sizeof(uint32_t)
 	);
 	log_debug("Second buffer initialised.\n");
 
 	/* We've just rendered, so we don't need to do it again right now. */
-	tofi.window.surface.redraw = false;
+	wdmenu.window.surface.redraw = false;
 
 	/* If we delayed keyboard initialisation, do it now */
-	if (tofi.late_keyboard_init) {
+	if (wdmenu.late_keyboard_init) {
 		log_debug("Creating xkb context.\n");
-		tofi.xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
-		if (tofi.xkb_context == NULL) {
+		wdmenu.xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+		if (wdmenu.xkb_context == NULL) {
 			log_error("Couldn't create an XKB context.\n");
 			exit(EXIT_FAILURE);
 		}
 		log_debug("Configuring keyboard.\n");
 		struct xkb_keymap *xkb_keymap = xkb_keymap_new_from_string(
-				tofi.xkb_context,
-				tofi.xkb_keymap_string,
+				wdmenu.xkb_context,
+				wdmenu.xkb_keymap_string,
 				XKB_KEYMAP_FORMAT_TEXT_V1,
 				XKB_KEYMAP_COMPILE_NO_FLAGS);
 
 		struct xkb_state *xkb_state = xkb_state_new(xkb_keymap);
-		xkb_keymap_unref(tofi.xkb_keymap);
-		xkb_state_unref(tofi.xkb_state);
-		tofi.xkb_keymap = xkb_keymap;
-		tofi.xkb_state = xkb_state;
-		free(tofi.xkb_keymap_string);
-		tofi.late_keyboard_init = false;
+		xkb_keymap_unref(wdmenu.xkb_keymap);
+		xkb_state_unref(wdmenu.xkb_state);
+		wdmenu.xkb_keymap = xkb_keymap;
+		wdmenu.xkb_state = xkb_state;
+		free(wdmenu.xkb_keymap_string);
+		wdmenu.late_keyboard_init = false;
 		log_debug("Keyboard configured.\n");
 	}
 
@@ -1750,17 +1750,17 @@ int main(int argc, char *argv[])
 	 * See the wl_display(3) man page for an explanation of the
 	 * order of the various functions called here.
 	 */
-	while (!tofi.closed) {
+	while (!wdmenu.closed) {
 		struct pollfd pollfds[2] = {{0}, {0}};
-		pollfds[0].fd = wl_display_get_fd(tofi.wl_display);
+		pollfds[0].fd = wl_display_get_fd(wdmenu.wl_display);
 
 		/* Make sure we're ready to receive events on the main queue. */
-		while (wl_display_prepare_read(tofi.wl_display) != 0) {
-			wl_display_dispatch_pending(tofi.wl_display);
+		while (wl_display_prepare_read(wdmenu.wl_display) != 0) {
+			wl_display_dispatch_pending(wdmenu.wl_display);
 		}
 
 		/* Make sure all our requests have been sent to the server. */
-		while (wl_display_flush(tofi.wl_display) != 0) {
+		while (wl_display_flush(wdmenu.wl_display) != 0) {
 			pollfds[0].events = POLLOUT;
 			poll(&pollfds[0], 1, -1);
 		}
@@ -1770,8 +1770,8 @@ int main(int argc, char *argv[])
 		 * there's some key repeating going on.
 		 */
 		int timeout = -1;
-		if (tofi.repeat.active) {
-			int64_t wait = (int64_t)tofi.repeat.next - (int64_t)gettime_ms();
+		if (wdmenu.repeat.active) {
+			int64_t wait = (int64_t)wdmenu.repeat.next - (int64_t)gettime_ms();
 			if (wait >= 0) {
 				timeout = wait;
 			} else {
@@ -1781,7 +1781,7 @@ int main(int argc, char *argv[])
 
 		pollfds[0].events = POLLIN | POLLPRI;
 		int res;
-		if (tofi.clipboard.fd == 0) {
+		if (wdmenu.clipboard.fd == 0) {
 			res = poll(&pollfds[0], 1, timeout);
 		} else {
 			/*
@@ -1789,7 +1789,7 @@ int main(int argc, char *argv[])
 			 * done by reading from a pipe, so poll that file
 			 * descriptor as well.
 			 */
-			pollfds[1].fd = tofi.clipboard.fd;
+			pollfds[1].fd = wdmenu.clipboard.fd;
 			pollfds[1].events = POLLIN | POLLPRI;
 			res = poll(pollfds, 2, timeout);
 		}
@@ -1798,32 +1798,32 @@ int main(int argc, char *argv[])
 			 * No events to process and no error - we presumably
 			 * have a key repeat to handle.
 			 */
-			wl_display_cancel_read(tofi.wl_display);
-			if (tofi.repeat.active) {
-				int64_t wait = (int64_t)tofi.repeat.next - (int64_t)gettime_ms();
+			wl_display_cancel_read(wdmenu.wl_display);
+			if (wdmenu.repeat.active) {
+				int64_t wait = (int64_t)wdmenu.repeat.next - (int64_t)gettime_ms();
 				if (wait <= 0) {
-					input_handle_keypress(&tofi, tofi.repeat.keycode);
-					tofi.repeat.next += 1000 / tofi.repeat.rate;
+					input_handle_keypress(&wdmenu, wdmenu.repeat.keycode);
+					wdmenu.repeat.next += 1000 / wdmenu.repeat.rate;
 				}
 			}
 		} else if (res < 0) {
 			/* There was an error polling the display. */
-			wl_display_cancel_read(tofi.wl_display);
+			wl_display_cancel_read(wdmenu.wl_display);
 		} else {
 			if (pollfds[0].revents & (POLLIN | POLLPRI)) {
 				/* Events to read, so put them on the queue. */
-				wl_display_read_events(tofi.wl_display);
+				wl_display_read_events(wdmenu.wl_display);
 			} else {
 				/*
 				 * No events to read - we were woken up to
 				 * handle clipboard data.
 				 */
-				wl_display_cancel_read(tofi.wl_display);
+				wl_display_cancel_read(wdmenu.wl_display);
 			}
 			if (pollfds[1].revents & (POLLIN | POLLPRI)) {
 				/* Read clipboard data. */
-				if (tofi.clipboard.fd > 0) {
-					read_clipboard(&tofi);
+				if (wdmenu.clipboard.fd > 0) {
+					read_clipboard(&wdmenu);
 				}
 			}
 			if (pollfds[1].revents & POLLHUP) {
@@ -1831,21 +1831,21 @@ int main(int argc, char *argv[])
 				 * The other end of the clipboard pipe has
 				 * closed, cleanup.
 				 */
-				clipboard_finish_paste(&tofi.clipboard);
+				clipboard_finish_paste(&wdmenu.clipboard);
 			}
 		}
 
 		/* Handle any events we read. */
-		wl_display_dispatch_pending(tofi.wl_display);
+		wl_display_dispatch_pending(wdmenu.wl_display);
 
-		if (tofi.window.surface.redraw) {
-			entry_update(&tofi.window.entry);
-			surface_draw(&tofi.window.surface);
-			tofi.window.surface.redraw = false;
+		if (wdmenu.window.surface.redraw) {
+			entry_update(&wdmenu.window.entry);
+			surface_draw(&wdmenu.window.surface);
+			wdmenu.window.surface.redraw = false;
 		}
-		if (tofi.submit) {
-			tofi.submit = false;
-			if (do_submit(&tofi)) {
+		if (wdmenu.submit) {
+			wdmenu.submit = false;
+			if (do_submit(&wdmenu)) {
 				break;
 			}
 		}
@@ -1860,68 +1860,68 @@ int main(int argc, char *argv[])
 	 * mostly from Pango, and Cairo holds onto quite a bit of cached data
 	 * (without leaking it)
 	 */
-	surface_destroy(&tofi.window.surface);
-	entry_destroy(&tofi.window.entry);
-	if (tofi.window.wp_viewport != NULL) {
-		wp_viewport_destroy(tofi.window.wp_viewport);
+	surface_destroy(&wdmenu.window.surface);
+	entry_destroy(&wdmenu.window.entry);
+	if (wdmenu.window.wp_viewport != NULL) {
+		wp_viewport_destroy(wdmenu.window.wp_viewport);
 	}
-	zwlr_layer_surface_v1_destroy(tofi.window.zwlr_layer_surface);
-	wl_surface_destroy(tofi.window.surface.wl_surface);
-	if (tofi.wl_keyboard != NULL) {
-		wl_keyboard_release(tofi.wl_keyboard);
+	zwlr_layer_surface_v1_destroy(wdmenu.window.zwlr_layer_surface);
+	wl_surface_destroy(wdmenu.window.surface.wl_surface);
+	if (wdmenu.wl_keyboard != NULL) {
+		wl_keyboard_release(wdmenu.wl_keyboard);
 	}
-	if (tofi.wl_pointer != NULL) {
-		wl_pointer_release(tofi.wl_pointer);
+	if (wdmenu.wl_pointer != NULL) {
+		wl_pointer_release(wdmenu.wl_pointer);
 	}
-	wl_compositor_destroy(tofi.wl_compositor);
-	if (tofi.clipboard.wl_data_offer != NULL) {
-		wl_data_offer_destroy(tofi.clipboard.wl_data_offer);
+	wl_compositor_destroy(wdmenu.wl_compositor);
+	if (wdmenu.clipboard.wl_data_offer != NULL) {
+		wl_data_offer_destroy(wdmenu.clipboard.wl_data_offer);
 	}
-	wl_data_device_release(tofi.wl_data_device);
-	wl_data_device_manager_destroy(tofi.wl_data_device_manager);
-	wl_seat_release(tofi.wl_seat);
+	wl_data_device_release(wdmenu.wl_data_device);
+	wl_data_device_manager_destroy(wdmenu.wl_data_device_manager);
+	wl_seat_release(wdmenu.wl_seat);
 	{
 		struct output_list_element *el;
 		struct output_list_element *tmp;
-		wl_list_for_each_safe(el, tmp, &tofi.output_list, link) {
+		wl_list_for_each_safe(el, tmp, &wdmenu.output_list, link) {
 			wl_list_remove(&el->link);
 			wl_output_release(el->wl_output);
 			free(el->name);
 			free(el);
 		}
 	}
-	wl_shm_destroy(tofi.wl_shm);
-	if (tofi.wp_fractional_scale_manager != NULL) {
-		wp_fractional_scale_manager_v1_destroy(tofi.wp_fractional_scale_manager);
+	wl_shm_destroy(wdmenu.wl_shm);
+	if (wdmenu.wp_fractional_scale_manager != NULL) {
+		wp_fractional_scale_manager_v1_destroy(wdmenu.wp_fractional_scale_manager);
 	}
-	if (tofi.wp_viewporter != NULL) {
-		wp_viewporter_destroy(tofi.wp_viewporter);
+	if (wdmenu.wp_viewporter != NULL) {
+		wp_viewporter_destroy(wdmenu.wp_viewporter);
 	}
-	zwlr_layer_shell_v1_destroy(tofi.zwlr_layer_shell);
-	xkb_state_unref(tofi.xkb_state);
-	xkb_keymap_unref(tofi.xkb_keymap);
-	xkb_context_unref(tofi.xkb_context);
-	wl_registry_destroy(tofi.wl_registry);
-	if (tofi.window.entry.mode == TOFI_MODE_DRUN) {
-		desktop_vec_destroy(&tofi.window.entry.apps);
+	zwlr_layer_shell_v1_destroy(wdmenu.zwlr_layer_shell);
+	xkb_state_unref(wdmenu.xkb_state);
+	xkb_keymap_unref(wdmenu.xkb_keymap);
+	xkb_context_unref(wdmenu.xkb_context);
+	wl_registry_destroy(wdmenu.wl_registry);
+	if (wdmenu.window.entry.mode == TOFI_MODE_DRUN) {
+		desktop_vec_destroy(&wdmenu.window.entry.apps);
 	}
-	if (tofi.window.entry.command_buffer != NULL) {
-		free(tofi.window.entry.command_buffer);
+	if (wdmenu.window.entry.command_buffer != NULL) {
+		free(wdmenu.window.entry.command_buffer);
 	}
-	string_ref_vec_destroy(&tofi.window.entry.commands);
-	string_ref_vec_destroy(&tofi.window.entry.results);
-	if (tofi.use_history) {
-		history_destroy(&tofi.window.entry.history);
+	string_ref_vec_destroy(&wdmenu.window.entry.commands);
+	string_ref_vec_destroy(&wdmenu.window.entry.results);
+	if (wdmenu.use_history) {
+		history_destroy(&wdmenu.window.entry.history);
 	}
 #endif
 	/*
 	 * For release builds, skip straight to display disconnection and quit.
 	 */
-	wl_display_roundtrip(tofi.wl_display);
-	wl_display_disconnect(tofi.wl_display);
+	wl_display_roundtrip(wdmenu.wl_display);
+	wl_display_disconnect(wdmenu.wl_display);
 
 	log_debug("Finished, exiting.\n");
-	if (tofi.closed) {
+	if (wdmenu.closed) {
 		return EXIT_FAILURE;
 	}
 	return EXIT_SUCCESS;

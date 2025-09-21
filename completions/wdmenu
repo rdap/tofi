@@ -1,6 +1,6 @@
 # vi: ft=bash
 
-_tofi()
+_wdmenu()
 {
 	local cur prev words cword
 	_init_completion || return
@@ -119,6 +119,6 @@ _tofi()
 			;;
 	esac
 }
-complete -F _tofi tofi
-complete -F _tofi tofi-run
-complete -F _tofi tofi-drun
+complete -F _wdmenu wdmenu
+complete -F _wdmenu wdmenu-run
+complete -F _wdmenu wdmenu-drun

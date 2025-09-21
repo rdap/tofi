@@ -1,6 +1,6 @@
 ## NAME
 
-tofi - configuration file
+wdmenu - configuration file
 
 ## DESCRIPTION
 
@@ -60,9 +60,9 @@ options.
 > Defaults:
 >
 >
-> > - tofi: None (no history file)
-> > - tofi-run: *\$XDG_STATE_HOME/tofi-history*
-> > - tofi-drun: *\$XDG_STATE_HOME/tofi-drun-history*
+> > - wdmenu: None (no history file)
+> > - wdmenu-run: *\$XDG_STATE_HOME/wdmenu-history*
+> > - wdmenu-drun: *\$XDG_STATE_HOME/wdmenu-drun-history*
 
 **matching-algorithm**=*normal\|prefix\|fuzzy*
 
@@ -77,7 +77,7 @@ options.
 **fuzzy-match**=*true\|false*
 
 > **WARNING**: This option is deprecated, and may be removed in a future
-> version of tofi. You should use the **matching-algorithm** option
+> version of wdmenu. You should use the **matching-algorithm** option
 > instead.
 >
 > If true, searching is performed via a simple fuzzy matching algorithm.
@@ -151,14 +151,14 @@ options.
 **drun-print-exec**=*true\|false*
 
 > **WARNING**: This option does nothing, and may be removed in a future
-> version of tofi.
+> version of wdmenu.
 >
 > Default: true
 
 **late-keyboard-init**=*true\|false*
 
 > Delay keyboard initialisation until after the first draw to screen.
-> This option is experimental, and will cause tofi to miss keypresses
+> This option is experimental, and will cause wdmenu to miss keypresses
 > for a short time after launch. The only reason to use this option is
 > performance on slow systems.
 >
@@ -184,7 +184,7 @@ options.
 
 **font**=*font*
 
-> Font to use. If *font* is a path to a font file, **tofi** will not
+> Font to use. If *font* is a path to a font file, **wdmenu** will not
 > have to use Pango or Fontconfig. This greatly speeds up startup, but
 > any characters not in the chosen font will fail to render.
 >
@@ -435,7 +435,7 @@ options.
 
 **num-results**=*n*
 
-> Maximum number of results to display. If *n* = 0, tofi will draw as
+> Maximum number of results to display. If *n* = 0, wdmenu will draw as
 > many results as it can fit in the window.
 >
 > Default: 0
@@ -458,7 +458,7 @@ options.
 **selection-padding**=*px*
 
 > **WARNING**: This option is deprecated, and will be removed in a
-> future version of tofi. You should use the
+> future version of wdmenu. You should use the
 > **selection-background-padding** option instead.
 >
 > Extra horizontal padding of the selection background. If *px* = -1,
@@ -526,10 +526,10 @@ options.
 **exclusive-zone**=*-1\|px\|%*
 
 > Set the size of the exclusive zone. A value of -1 means ignore
-> exclusive zones completely. A value of 0 will move tofi out of the way
+> exclusive zones completely. A value of 0 will move wdmenu out of the way
 > of other windows' exclusive zones. A value greater than 0 will set
 > that much space as an exclusive zone. Values greater than 0 are only
-> meaningful when tofi is anchored to a single edge.
+> meaningful when wdmenu is anchored to a single edge.
 >
 > Default: -1
 
@@ -664,4 +664,4 @@ Philip Jones \<<philj56@gmail.com>\>
 
 ## SEE ALSO
 
-**tofi**(1), **dmenu**(1) **rofi**(1)
+**wdmenu**(1), **dwdmenu**(1) **rofi**(1)

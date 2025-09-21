@@ -5,49 +5,49 @@
 #include "input.h"
 #include "log.h"
 #include "nelem.h"
-#include "tofi.h"
+#include "wdmenu.h"
 #include "unicode.h"
 
 
 static uint32_t keysym_to_key(xkb_keysym_t sym);
-static void add_character(struct tofi *tofi, xkb_keycode_t keycode);
-static void delete_character(struct tofi *tofi);
-static void delete_word(struct tofi *tofi);
-static void clear_input(struct tofi *tofi);
-static void paste(struct tofi *tofi);
-static void select_previous_result(struct tofi *tofi);
-static void select_next_result(struct tofi *tofi);
-static void select_previous_page(struct tofi *tofi);
-static void select_next_page(struct tofi *tofi);
-static void next_cursor_or_result(struct tofi *tofi);
-static void previous_cursor_or_result(struct tofi *tofi);
-static void reset_selection(struct tofi *tofi);
-static void autocomplete_selection(struct tofi *tofi);
+static void add_character(struct wdmenu *wdmenu, xkb_keycode_t keycode);
+static void delete_character(struct wdmenu *wdmenu);
+static void delete_word(struct wdmenu *wdmenu);
+static void clear_input(struct wdmenu *wdmenu);
+static void paste(struct wdmenu *wdmenu);
+static void select_previous_result(struct wdmenu *wdmenu);
+static void select_next_result(struct wdmenu *wdmenu);
+static void select_previous_page(struct wdmenu *wdmenu);
+static void select_next_page(struct wdmenu *wdmenu);
+static void next_cursor_or_result(struct wdmenu *wdmenu);
+static void previous_cursor_or_result(struct wdmenu *wdmenu);
+static void reset_selection(struct wdmenu *wdmenu);
+static void autocomplete_selection(struct wdmenu *wdmenu);
 
-void input_handle_keypress(struct tofi *tofi, xkb_keycode_t keycode)
+void input_handle_keypress(struct wdmenu *wdmenu, xkb_keycode_t keycode)
 {
-	if (tofi->xkb_state == NULL) {
+	if (wdmenu->xkb_state == NULL) {
 		return;
 	}
 
 	bool ctrl = xkb_state_mod_name_is_active(
-			tofi->xkb_state,
+			wdmenu->xkb_state,
 			XKB_MOD_NAME_CTRL,
 			XKB_STATE_MODS_EFFECTIVE);
 	bool alt = xkb_state_mod_name_is_active(
-			tofi->xkb_state,
+			wdmenu->xkb_state,
 			XKB_MOD_NAME_ALT,
 			XKB_STATE_MODS_EFFECTIVE);
 
-	uint32_t ch = xkb_state_key_get_utf32(tofi->xkb_state, keycode);
+	uint32_t ch = xkb_state_key_get_utf32(wdmenu->xkb_state, keycode);
 
 	/*
 	 * Use physical key code for shortcuts by default, ignoring layout
 	 * changes. Linux keycodes are 8 less than XKB keycodes.
 	 */
 	uint32_t key = keycode - 8;
-	if (!tofi->physical_keybindings) {
-		xkb_keysym_t sym = xkb_state_key_get_one_sym(tofi->xkb_state, keycode);
+	if (!wdmenu->physical_keybindings) {
+		xkb_keysym_t sym = xkb_state_key_get_one_sym(wdmenu->xkb_state, keycode);
 		key = keysym_to_key(sym);
 	}
 
@@ -56,54 +56,54 @@ void input_handle_keypress(struct tofi *tofi, xkb_keycode_t keycode)
 	 * for it explicitly.
 	 */
 	if (utf32_isprint(ch) && !ctrl && !alt) {
-		add_character(tofi, keycode);
+		add_character(wdmenu, keycode);
 	} else if ((key == KEY_BACKSPACE || key == KEY_W) && ctrl) {
-		delete_word(tofi);
+		delete_word(wdmenu);
 	} else if (key == KEY_BACKSPACE
 			|| (key == KEY_H && ctrl)) {
-		delete_character(tofi);
+		delete_character(wdmenu);
 	} else if (key == KEY_U && ctrl) {
-		clear_input(tofi);
+		clear_input(wdmenu);
 	} else if (key == KEY_V && ctrl) {
-		paste(tofi);
+		paste(wdmenu);
 	} else if (key == KEY_LEFT) {
-		previous_cursor_or_result(tofi);
+		previous_cursor_or_result(wdmenu);
 	} else if (key == KEY_RIGHT) {
-		next_cursor_or_result(tofi);
+		next_cursor_or_result(wdmenu);
 	} else if (key == KEY_UP
 			|| key == KEY_LEFT
 			|| (key == KEY_H && alt)
 			|| ((key == KEY_K || key == KEY_P || key == KEY_B) && (ctrl || alt))) {
-		select_previous_result(tofi);
+		select_previous_result(wdmenu);
 	} else if (key == KEY_DOWN
 			|| key == KEY_RIGHT
 			|| (key == KEY_L && alt)
 			|| ((key == KEY_J || key == KEY_N || key == KEY_F) && (ctrl || alt))) {
-		select_next_result(tofi);
+		select_next_result(wdmenu);
 	} else if (key == KEY_TAB) {
-		autocomplete_selection(tofi);
+		autocomplete_selection(wdmenu);
 	} else if (key == KEY_HOME) {
-		reset_selection(tofi);
+		reset_selection(wdmenu);
 	} else if (key == KEY_PAGEUP) {
-		select_previous_page(tofi);
+		select_previous_page(wdmenu);
 	} else if (key == KEY_PAGEDOWN) {
-		select_next_page(tofi);
+		select_next_page(wdmenu);
 	} else if (key == KEY_ESC
 			|| ((key == KEY_C || key == KEY_LEFTBRACE || key == KEY_G) && ctrl)) {
-		tofi->closed = true;
+		wdmenu->closed = true;
 		return;
 	} else if (key == KEY_ENTER
 			|| key == KEY_KPENTER
 			|| (key == KEY_M && ctrl)) {
-		tofi->submit = true;
+		wdmenu->submit = true;
 		return;
 	}
 
-	if (tofi->auto_accept_single && tofi->window.entry.results.count == 1) {
-		tofi->submit = true;
+	if (wdmenu->auto_accept_single && wdmenu->window.entry.results.count == 1) {
+		wdmenu->submit = true;
 	}
 
-	tofi->window.surface.redraw = true;
+	wdmenu->window.surface.redraw = true;
 }
 
 static uint32_t keysym_to_key(xkb_keysym_t sym)
@@ -163,16 +163,16 @@ static uint32_t keysym_to_key(xkb_keysym_t sym)
 	return (uint32_t)-1;
 }
 
-void reset_selection(struct tofi *tofi)
+void reset_selection(struct wdmenu *wdmenu)
 {
-	struct entry *entry = &tofi->window.entry;
+	struct entry *entry = &wdmenu->window.entry;
 	entry->selection = 0;
 	entry->first_result = 0;
 }
 
-void add_character(struct tofi *tofi, xkb_keycode_t keycode)
+void add_character(struct wdmenu *wdmenu, xkb_keycode_t keycode)
 {
-	struct entry *entry = &tofi->window.entry;
+	struct entry *entry = &wdmenu->window.entry;
 
 	if (entry->input_utf32_length >= N_ELEM(entry->input_utf32) - 1) {
 		/* No more room for input */
@@ -181,7 +181,7 @@ void add_character(struct tofi *tofi, xkb_keycode_t keycode)
 
 	char buf[5]; /* 4 UTF-8 bytes plus null terminator. */
 	int len = xkb_state_key_get_utf8(
-			tofi->xkb_state,
+			wdmenu->xkb_state,
 			keycode,
 			buf,
 			sizeof(buf));
@@ -195,16 +195,16 @@ void add_character(struct tofi *tofi, xkb_keycode_t keycode)
 		entry->input_utf8_length += len;
 
 		if (entry->mode == TOFI_MODE_DRUN) {
-			struct string_ref_vec results = desktop_vec_filter(&entry->apps, entry->input_utf8, tofi->matching_algorithm);
+			struct string_ref_vec results = desktop_vec_filter(&entry->apps, entry->input_utf8, wdmenu->matching_algorithm);
 			string_ref_vec_destroy(&entry->results);
 			entry->results = results;
 		} else {
 			struct string_ref_vec tmp = entry->results;
-			entry->results = string_ref_vec_filter(&entry->results, entry->input_utf8, tofi->matching_algorithm);
+			entry->results = string_ref_vec_filter(&entry->results, entry->input_utf8, wdmenu->matching_algorithm);
 			string_ref_vec_destroy(&tmp);
 		}
 
-		reset_selection(tofi);
+		reset_selection(wdmenu);
 	} else {
 		for (size_t i = entry->input_utf32_length; i > entry->cursor_position; i--) {
 			entry->input_utf32[i] = entry->input_utf32[i - 1];
@@ -213,15 +213,15 @@ void add_character(struct tofi *tofi, xkb_keycode_t keycode)
 		entry->input_utf32_length++;
 		entry->input_utf32[entry->input_utf32_length] = U'\0';
 
-		input_refresh_results(tofi);
+		input_refresh_results(wdmenu);
 	}
 
 	entry->cursor_position++;
 }
 
-void input_refresh_results(struct tofi *tofi)
+void input_refresh_results(struct wdmenu *wdmenu)
 {
-	struct entry *entry = &tofi->window.entry;
+	struct entry *entry = &wdmenu->window.entry;
 
 	size_t bytes_written = 0;
 	for (size_t i = 0; i < entry->input_utf32_length; i++) {
@@ -233,17 +233,17 @@ void input_refresh_results(struct tofi *tofi)
 	entry->input_utf8_length = bytes_written;
 	string_ref_vec_destroy(&entry->results);
 	if (entry->mode == TOFI_MODE_DRUN) {
-		entry->results = desktop_vec_filter(&entry->apps, entry->input_utf8, tofi->matching_algorithm);
+		entry->results = desktop_vec_filter(&entry->apps, entry->input_utf8, wdmenu->matching_algorithm);
 	} else {
-		entry->results = string_ref_vec_filter(&entry->commands, entry->input_utf8, tofi->matching_algorithm);
+		entry->results = string_ref_vec_filter(&entry->commands, entry->input_utf8, wdmenu->matching_algorithm);
 	}
 
-	reset_selection(tofi);
+	reset_selection(wdmenu);
 }
 
-void delete_character(struct tofi *tofi)
+void delete_character(struct wdmenu *wdmenu)
 {
-	struct entry *entry = &tofi->window.entry;
+	struct entry *entry = &wdmenu->window.entry;
 
 	if (entry->input_utf32_length == 0) {
 		/* No input to delete. */
@@ -265,12 +265,12 @@ void delete_character(struct tofi *tofi)
 		entry->input_utf32[entry->input_utf32_length] = U'\0';
 	}
 
-	input_refresh_results(tofi);
+	input_refresh_results(wdmenu);
 }
 
-void delete_word(struct tofi *tofi)
+void delete_word(struct wdmenu *wdmenu)
 {
-	struct entry *entry = &tofi->window.entry;
+	struct entry *entry = &wdmenu->window.entry;
 
 	if (entry->cursor_position == 0) {
 		/* No input to delete. */
@@ -292,23 +292,23 @@ void delete_word(struct tofi *tofi)
 	entry->input_utf32[entry->input_utf32_length] = U'\0';
 
 	entry->cursor_position = new_cursor_pos;
-	input_refresh_results(tofi);
+	input_refresh_results(wdmenu);
 }
 
-void clear_input(struct tofi *tofi)
+void clear_input(struct wdmenu *wdmenu)
 {
-	struct entry *entry = &tofi->window.entry;
+	struct entry *entry = &wdmenu->window.entry;
 
 	entry->cursor_position = 0;
 	entry->input_utf32_length = 0;
 	entry->input_utf32[0] = U'\0';
 
-	input_refresh_results(tofi);
+	input_refresh_results(wdmenu);
 }
 
-void paste(struct tofi *tofi)
+void paste(struct wdmenu *wdmenu)
 {
-	if (tofi->clipboard.wl_data_offer == NULL || tofi->clipboard.mime_type == NULL) {
+	if (wdmenu->clipboard.wl_data_offer == NULL || wdmenu->clipboard.mime_type == NULL) {
 		return;
 	}
 
@@ -322,16 +322,16 @@ void paste(struct tofi *tofi)
 		log_error("Failed to open pipe for clipboard: %s\n", strerror(errno));
 		return;
 	}
-	wl_data_offer_receive(tofi->clipboard.wl_data_offer, tofi->clipboard.mime_type, fildes[1]);
+	wl_data_offer_receive(wdmenu->clipboard.wl_data_offer, wdmenu->clipboard.mime_type, fildes[1]);
 	close(fildes[1]);
 
 	/* Keep the read end for reading in the main loop. */
-	tofi->clipboard.fd = fildes[0];
+	wdmenu->clipboard.fd = fildes[0];
 }
 
-void select_previous_result(struct tofi *tofi)
+void select_previous_result(struct wdmenu *wdmenu)
 {
-	struct entry *entry = &tofi->window.entry;
+	struct entry *entry = &wdmenu->window.entry;
 
 	if (entry->selection > 0) {
 		entry->selection--;
@@ -349,9 +349,9 @@ void select_previous_result(struct tofi *tofi)
 	}
 }
 
-void select_next_result(struct tofi *tofi)
+void select_next_result(struct wdmenu *wdmenu)
 {
-	struct entry *entry = &tofi->window.entry;
+	struct entry *entry = &wdmenu->window.entry;
 
 	uint32_t nsel = MAX(MIN(entry->num_results_drawn, entry->results.count), 1);
 
@@ -368,34 +368,34 @@ void select_next_result(struct tofi *tofi)
 	}
 }
 
-void previous_cursor_or_result(struct tofi *tofi)
+void previous_cursor_or_result(struct wdmenu *wdmenu)
 {
-	struct entry *entry = &tofi->window.entry;
+	struct entry *entry = &wdmenu->window.entry;
 
 	if (entry->cursor_theme.show
 			&& entry->selection == 0
 			&& entry->cursor_position > 0) {
 		entry->cursor_position--;
 	} else {
-		select_previous_result(tofi);
+		select_previous_result(wdmenu);
 	}
 }
 
-void next_cursor_or_result(struct tofi *tofi)
+void next_cursor_or_result(struct wdmenu *wdmenu)
 {
-	struct entry *entry = &tofi->window.entry;
+	struct entry *entry = &wdmenu->window.entry;
 
 	if (entry->cursor_theme.show
 			&& entry->cursor_position < entry->input_utf32_length) {
 		entry->cursor_position++;
 	} else {
-		select_next_result(tofi);
+		select_next_result(wdmenu);
 	}
 }
 
-void select_previous_page(struct tofi *tofi)
+void select_previous_page(struct wdmenu *wdmenu)
 {
-	struct entry *entry = &tofi->window.entry;
+	struct entry *entry = &wdmenu->window.entry;
 
 	if (entry->first_result >= entry->last_num_results_drawn) {
 		entry->first_result -= entry->last_num_results_drawn;
@@ -406,9 +406,9 @@ void select_previous_page(struct tofi *tofi)
 	entry->last_num_results_drawn = entry->num_results_drawn;
 }
 
-void select_next_page(struct tofi *tofi)
+void select_next_page(struct wdmenu *wdmenu)
 {
-	struct entry *entry = &tofi->window.entry;
+	struct entry *entry = &wdmenu->window.entry;
 
 	entry->first_result += entry->num_results_drawn;
 	if (entry->first_result >= entry->results.count) {
@@ -418,9 +418,9 @@ void select_next_page(struct tofi *tofi)
 	entry->last_num_results_drawn = entry->num_results_drawn;
 }
 
-void autocomplete_selection(struct tofi *tofi)
+void autocomplete_selection(struct wdmenu *wdmenu)
 {
-	struct entry *entry = &tofi->window.entry;
+	struct entry *entry = &wdmenu->window.entry;
 	if (entry->results.count == 0) return;
 
 	const char *str = entry->results.buf[entry->first_result + entry->selection].string;

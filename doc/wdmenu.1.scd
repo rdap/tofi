@@ -1,27 +1,27 @@
-tofi(1)
+wdmenu(1)
 
 # NAME
 
-tofi - Tiny dynamic menu for Wayland, inspired by *rofi*(1) and *dmenu*(1).
+wdmenu - Tiny dynamic wdmenu for Wayland, inspired by *rofi*(1) and *dwdmenu*(1).
 
 # SYNOPSIS
 
-*tofi* [options...]
+*wdmenu* [options...]
 
-*tofi-run* [options...]
+*wdmenu-run* [options...]
 
-*tofi-drun* [options...]
+*wdmenu-drun* [options...]
 
 # DESCRIPTION
 
-*tofi* is a tiny dynamic menu for Wayland compositors supporting the
+*wdmenu* is a tiny dynamic wdmenu for Wayland compositors supporting the
 layer-shell protocol. It reads newline-separated items from stdin, and displays
-a graphical selection menu. When a selection is made, it is printed to stdout.
+a graphical selection wdmenu. When a selection is made, it is printed to stdout.
 
-When invoked via the name *tofi-run*, *tofi* will not accept items on stdin,
+When invoked via the name *wdmenu-run*, *wdmenu* will not accept items on stdin,
 instead presenting a list of executables in the user's $PATH.
 
-When invoked via the name *tofi-drun*, *tofi* will not accept items on stdin,
+When invoked via the name *wdmenu-drun*, *wdmenu* will not accept items on stdin,
 and will generate a list of applications from desktop files as described in the
 Desktop Entry Specification.
 
@@ -33,7 +33,7 @@ Desktop Entry Specification.
 *-c, --config* <path>
 	Specify path to custom config file.
 
-All config file options described in *tofi*(5) are also accepted, in the form
+All config file options described in *wdmenu*(5) are also accepted, in the form
 *--key=value*.
 
 # KEYS
@@ -69,32 +69,32 @@ All config file options described in *tofi*(5) are also accepted, in the form
 
 # FILES
 
-_/etc/xdg/tofi/config_
+_/etc/xdg/wdmenu/config_
 	Example configuration file.
 
-_$XDG_CONFIG_HOME/tofi/config_
+_$XDG_CONFIG_HOME/wdmenu/config_
 	The default configuration file location.
 
-_$XDG_CACHE_HOME/tofi-compgen_
+_$XDG_CACHE_HOME/wdmenu-compgen_
 	Cached list of executables under $PATH, regenerated as necessary.
 
-_$XDG_CACHE_HOME/tofi-drun_
+_$XDG_CACHE_HOME/wdmenu-drun_
 	Cached list of desktop applications, regenerated as necessary.
 
-_$XDG_STATE_HOME/tofi-history_
-	Numeric count of commands selected in *tofi-run*, to enable sorting
+_$XDG_STATE_HOME/wdmenu-history_
+	Numeric count of commands selected in *wdmenu-run*, to enable sorting
 	results by run count.
 
-_$XDG_STATE_HOME/tofi-drun-history_
-	Numeric count of commands selected in *tofi-drun*, to enable sorting
+_$XDG_STATE_HOME/wdmenu-drun-history_
+	Numeric count of commands selected in *wdmenu-drun*, to enable sorting
 	results by run count.
 
 # EXIT STATUS
 
-*tofi* exits with one of the following values:
+*wdmenu* exits with one of the following values:
 
 0
-	Success; a selection was made, or *tofi* was invoked with the *-h*
+	Success; a selection was made, or *wdmenu* was invoked with the *-h*
 	option.
 
 1
@@ -106,4 +106,4 @@ Philip Jones <philj56@gmail.com>
 
 # SEE ALSO
 
-*tofi*(5), *dmenu*(1), *rofi*(1)
+*wdmenu*(5), *dwdmenu*(1), *rofi*(1)
